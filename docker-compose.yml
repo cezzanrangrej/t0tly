@@ -1,0 +1,103 @@
+version: "3.9"
+
+x-api-common: &api-common
+  build: .
+  env_file: .env
+  environment:
+    - POSTGRES_DSN=postgresql://urlshort:urlshort@postgres:5432/urlshort
+    - REDIS_URL=redis://redis:6379/0
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+  networks:
+    - urlnet
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+      - api3
+    restart: unless-stopped
+    networks:
+      - urlnet
+
+  api1:
+    <<: *api-common
+    hostname: api1
+
+  api2:
+    <<: *api-common
+    hostname: api2
+
+  api3:
+    <<: *api-common
+    hostname: api3
+
+  redis:
+    image: redis:7.4-alpine
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-backlog 511
+      --hz 20
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - urlnet
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: urlshort
+      POSTGRES_PASSWORD: urlshort
+      POSTGRES_DB: urlshort
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c max_connections=100
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c autovacuum_vacuum_scale_factor=0.01
+      -c autovacuum_analyze_scale_factor=0.005
+      -c log_min_duration_statement=200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urlshort -d urlshort"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - urlnet
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+networks:
+  urlnet:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:

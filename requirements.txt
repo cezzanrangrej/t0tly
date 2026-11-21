@@ -1,0 +1,16 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+uvloop==0.21.0; sys_platform != "win32"
+httptools==0.6.4; sys_platform != "win32"
+asyncpg==0.30.0
+redis[asyncio]==5.2.0
+cachetools==5.5.0
+orjson==3.10.11
+pydantic==2.10.1
+pydantic-settings==2.6.1
+prometheus-client==0.21.0
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.0
+pytest-cov==6.0.0
+anyio==4.7.0

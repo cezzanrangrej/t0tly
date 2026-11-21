@@ -1,0 +1,51 @@
+# Environment & Secrets
+.env
+.env.local
+*.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Test & Coverage artifacts
+pytest.ini
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Ephemeral Load Test & Benchmark Artifacts
+tools/
+loadtest/codes.txt
+loadtest/results/
+*.log
+
+# Binaries & Executables
+*.exe
+*.dll
+*.pdb
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Packaging
+dist/
+build/
+*.egg-info/
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+#test
+tests/
+loadtest/
+
