@@ -10,13 +10,29 @@
 --   checkpoint_completion_target=0.9: spreads fsync I/O over 90% of checkpoint interval
 
 -- Sequence for block-based ID generation.
--- INCREMENT BY matches Settings.id_block_size (100000).
--- Each API process calls nextval() once and owns the entire block in memory.
+-- For a fresh database, START WITH 100000 so the first nextval() returns 100000.
+-- BlockAllocator computes first = last - block_size + 1 = 100000 - 100000 + 1 = 1.
+-- This ensures the first allocation block is IDs 1–100,000.
 CREATE SEQUENCE IF NOT EXISTS url_id_seq
-    START 1
+    START WITH 100000
     INCREMENT BY 100000
     NO MAXVALUE
     CACHE 1;
+
+-- Safe sequence alignment for existing databases:
+-- If an existing database has url_id_seq with last_value < 100000 and is_called = false
+-- (created with legacy START 1 and never used), align it to 100000 (is_called = false).
+-- If the sequence was already called or advanced past 100000, do NOT reset it.
+DO $$
+DECLARE
+    curr_val BIGINT;
+    called BOOLEAN;
+BEGIN
+    SELECT last_value, is_called INTO curr_val, called FROM url_id_seq;
+    IF curr_val < 100000 AND NOT called THEN
+        PERFORM setval('url_id_seq', 100000, false);
+    END IF;
+END $$;
 
 -- Primary URL mapping table
 CREATE TABLE IF NOT EXISTS urls (

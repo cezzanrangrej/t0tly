@@ -1,11 +1,14 @@
-version: "3.9"
-
 x-api-common: &api-common
   build: .
+  command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "uvloop", "--http", "httptools", "--workers", "3", "--backlog", "4096", "--no-access-log"]
   env_file: .env
   environment:
     - POSTGRES_DSN=postgresql://urlshort:urlshort@postgres:5432/urlshort
     - REDIS_URL=redis://redis:6379/0
+    - FEISTEL_KEY1=${FEISTEL_KEY1:-deadbeef01234567}
+    - FEISTEL_KEY2=${FEISTEL_KEY2:-cafebabe89abcdef}
+    - FEISTEL_KEY3=${FEISTEL_KEY3:-0011223344556677}
+    - FEISTEL_KEY4=${FEISTEL_KEY4:-8899aabbccddeeff}
   depends_on:
     postgres:
       condition: service_healthy
@@ -16,6 +19,14 @@ x-api-common: &api-common
     - urlnet
 
 services:
+  seeder:
+    <<: *api-common
+    profiles: ["tools"]
+    restart: "no"
+    command: ["python", "-m", "loadtest.seed_db", "--count", "100000"]
+    volumes:
+      - ./loadtest:/app/loadtest
+
   nginx:
     image: nginx:1.27-alpine
     ports:
@@ -46,11 +57,13 @@ services:
     image: redis:7.4-alpine
     command: >
       redis-server
+      --io-threads 4
+      --io-threads-do-reads yes
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
       --save ""
       --appendonly no
-      --tcp-backlog 511
+      --tcp-backlog 2048
       --hz 20
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

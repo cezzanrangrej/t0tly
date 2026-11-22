@@ -26,23 +26,23 @@ class Settings(BaseSettings):
     redis_max_connections: int = 20
     redis_timeout: float = 0.5         # seconds
     cache_ttl_seconds: int = 86400     # 24 h Redis TTL
-    local_cache_ttl: int = 60          # seconds
-    local_cache_max: int = 10_000
+    local_cache_ttl: int = 180          # seconds (L1 hot cache TTL for high-QPS)
+    local_cache_max: int = 50_000
 
     # ID generation
     id_block_size: int = 100_000
-    feistel_key1: str = Field(default_factory=lambda: secrets.token_hex(8))
-    feistel_key2: str = Field(default_factory=lambda: secrets.token_hex(8))
-    feistel_key3: str = Field(default_factory=lambda: secrets.token_hex(8))
-    feistel_key4: str = Field(default_factory=lambda: secrets.token_hex(8))
+    feistel_key1: str = "deadbeef01234567"
+    feistel_key2: str = "cafebabe89abcdef"
+    feistel_key3: str = "0011223344556677"
+    feistel_key4: str = "8899aabbccddeeff"
 
     # Rate limiting
     rate_limit_creates: int = 10       # requests per window
     rate_limit_window: int = 60        # seconds
 
     # Analytics
-    analytics_queue_size: int = 10_000
-    analytics_batch_size: int = 200
+    analytics_queue_size: int = 50_000
+    analytics_batch_size: int = 1_000
     analytics_flush_interval: float = 2.0
 
     # Negative cache
