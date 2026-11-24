@@ -19,7 +19,13 @@ _round_keys: list[int] = []
 
 
 def _feistel_round_keys() -> list[int]:
-    """Derive four 32-bit round keys from env strings (deterministic hash)."""
+    """
+    Derive four 32-bit round keys from environment strings (deterministic hash).
+    SECURITY REQUIREMENT:
+    These keys MUST remain fixed across all worker processes, containers, and restarts
+    to ensure deterministic bijection. They must be injected via environment variables
+    and NEVER committed to source control.
+    """
     keys = []
     for raw in [
         settings.feistel_key1, settings.feistel_key2,

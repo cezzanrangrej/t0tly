@@ -84,24 +84,39 @@ async def get_click_count(code: str) -> int:
 
 
 async def insert_clicks_batch(events: list[dict]) -> None:
-    """Bulk-insert analytics click rows."""
+    """
+    Bulk-insert analytics click rows.
+    In 'new' build: streaming binary COPY protocol inside a transaction with
+    SET LOCAL synchronous_commit = 'off'.
+    In 'old' build: conn.executemany with single-row INSERTs and default synchronous_commit.
+    """
     if not events:
         return
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.executemany(
-            "INSERT INTO clicks (code, clicked_at, user_agent, referrer)"
-            " VALUES ($1, $2, $3, $4)",
-            [
-                (
-                    e["code"],
-                    e["timestamp"],
-                    e.get("user_agent", ""),
-                    e.get("referrer", ""),
+        records = [
+            (
+                e["code"],
+                e["timestamp"],
+                e.get("user_agent", ""),
+                e.get("referrer", ""),
+            )
+            for e in events
+        ]
+        if settings.analytics_build == "old":
+            await conn.executemany(
+                "INSERT INTO clicks (code, clicked_at, user_agent, referrer)"
+                " VALUES ($1, $2, $3, $4)",
+                records,
+            )
+        else:
+            async with conn.transaction():
+                await conn.execute("SET LOCAL synchronous_commit = 'off'")
+                await conn.copy_records_to_table(
+                    "clicks",
+                    records=records,
+                    columns=["code", "clicked_at", "user_agent", "referrer"],
                 )
-                for e in events
-            ],
-        )
 
 
 async def purge_expired(batch_size: int = 500) -> int:

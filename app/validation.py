@@ -78,7 +78,7 @@ def validate_url(url: str) -> str:
 
 def validate_alias(alias: str) -> str:
     if not ALIAS_RE.match(alias):
-        raise ValidationError("Alias must be 3-30 characters of [A-Za-z0-9_-]")
+        raise ValidationError("Alias must be 3-30 characters of [A-Za-z0-9_-]", status=422)
     if alias.lower() in [r.lower() for r in settings.reserved_codes]:
-        raise ValidationError(f"Alias '{alias}' is reserved")
+        raise ValidationError(f"Alias '{alias}' is reserved", status=400)
     return alias

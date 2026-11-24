@@ -66,17 +66,21 @@ async def lifespan(app: FastAPI):
     set_pool(pool)
     allocator.set_pool(pool)
 
-    # Idempotent SQL migrations
+    # Idempotent SQL migrations (serialized via Postgres advisory lock)
     mig_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "migrations")
     )
     if os.path.isdir(mig_dir):
-        for fname in sorted(os.listdir(mig_dir)):
-            if fname.endswith(".sql"):
-                sql = open(os.path.join(mig_dir, fname)).read()
-                async with pool.acquire() as conn:
-                    await conn.execute(sql)
-                logger.info("Applied migration: %s", fname)
+        async with pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock(8472910)")
+            try:
+                for fname in sorted(os.listdir(mig_dir)):
+                    if fname.endswith(".sql"):
+                        sql = open(os.path.join(mig_dir, fname)).read()
+                        await conn.execute(sql)
+                        logger.info("Applied migration: %s", fname)
+            finally:
+                await conn.execute("SELECT pg_advisory_unlock(8472910)")
 
     # Ensure sequence INCREMENT matches config
     async with pool.acquire() as conn:
@@ -161,6 +165,9 @@ class ShortenRequest(BaseModel):
         try:
             return validate_alias(v)
         except ValidationError as e:
+            if e.status == 400:
+                # Allow through to endpoint so it can return HTTP 400 Bad Request instead of Pydantic 422
+                return v
             raise ValueError(str(e))
 
 
@@ -193,13 +200,6 @@ async def shorten(req: Request, body: ShortenRequest):
             },
         )
 
-    # Determine code: custom alias or auto-generated
-    if body.alias:
-        code = body.alias
-    else:
-        seq_id = await allocator.next_id()
-        code = id_to_code(seq_id)
-
     # Compute expiry timestamp
     expires_at = None
     expires_at_str = None
@@ -207,12 +207,30 @@ async def shorten(req: Request, body: ShortenRequest):
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=body.ttl_seconds)
         expires_at_str = expires_at.isoformat()
 
-    # INSERT — PK constraint enforces uniqueness (alias conflict → 409)
-    ok = await insert_url(code, body.url, expires_at)
-    if not ok:
-        SHORTEN_COUNT_409.inc()
-        SHORTEN_LATENCY_HIST.observe(time.perf_counter() - t0)
-        raise HTTPException(status_code=409, detail=f"Code '{code}' already exists")
+    # Determine code: custom alias or auto-generated
+    if body.alias:
+        if body.alias.lower() in [r.lower() for r in settings.reserved_codes]:
+            raise HTTPException(status_code=400, detail=f"Alias '{body.alias}' is reserved")
+        code = body.alias
+        ok = await insert_url(code, body.url, expires_at)
+        if not ok:
+            SHORTEN_COUNT_409.inc()
+            SHORTEN_LATENCY_HIST.observe(time.perf_counter() - t0)
+            raise HTTPException(status_code=409, detail=f"Code '{code}' already exists")
+    else:
+        # Auto-generated code: retry up to 3 times ONLY on unique violation
+        # (e.g. if an auto-generated code happens to match an existing custom alias)
+        code = None
+        for attempt in range(3):
+            seq_id = await allocator.next_id()
+            candidate = id_to_code(seq_id)
+            ok = await insert_url(candidate, body.url, expires_at)
+            if ok:
+                code = candidate
+                break
+        if not code:
+            logger.error("Failed to allocate unique auto-generated code after 3 attempts")
+            raise HTTPException(status_code=500, detail="Failed to allocate unique short code")
 
     # Warm caches immediately so the first redirect is a cache hit
     await set_url(code, body.url, expires_at.timestamp() if expires_at else None)
@@ -226,6 +244,12 @@ async def shorten(req: Request, body: ShortenRequest):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+if settings.enable_bench_endpoint:
+    @app.get("/bench")
+    async def bench():
+        return Response(content=b"ok", media_type="text/plain")
 
 
 @app.get("/ready")
@@ -287,12 +311,13 @@ async def redirect(code: str, request: Request):
         REDIRECT_LATENCY_HIST.observe(time.perf_counter() - t0)
         raise HTTPException(status_code=404, detail="Short code not found or expired")
 
-    # 3. Record click asynchronously (drop if queue full — never blocks)
-    enqueue_click(
-        code,
-        request.headers.get("user-agent", ""),
-        request.headers.get("referer", ""),
-    )
+    # 3. Record click asynchronously (drops if queue full — never blocks redirect)
+    if settings.analytics_enabled:
+        enqueue_click(
+            code,
+            request.headers.get("user-agent", ""),
+            request.headers.get("referer", ""),
+        )
 
     if settings.redirect_code == 302:
         REDIRECT_COUNT_302.inc()

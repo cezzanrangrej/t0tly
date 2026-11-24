@@ -10,7 +10,6 @@ __pycache__/
 *.so
 
 # Test & Coverage artifacts
-pytest.ini
 .pytest_cache/
 .coverage
 .coverage.*
@@ -18,16 +17,22 @@ htmlcov/
 .tox/
 .nox/
 
-# Ephemeral Load Test & Benchmark Artifacts
-tools/
-loadtest/codes.txt
-loadtest/results/
-*.log
-
-# Binaries & Executables
+# Binaries & Compiled Executables
 *.exe
 *.dll
 *.pdb
+*.so
+*.dylib
+tools/
+
+# Benchmark artifacts & Large Generated Files
+codes.txt
+bench/codes.txt
+*.zip
+*.log
+*temp_summary.json
+checkpoint_old_results.json
+matrix_results.json
 
 # Virtual Environments
 .venv/
@@ -45,7 +50,3 @@ build/
 Thumbs.db
 .vscode/
 .idea/
-#test
-tests/
-loadtest/
-

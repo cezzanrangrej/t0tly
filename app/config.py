@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     local_cache_max: int = 50_000
 
     # ID generation
+    # IMPORTANT: The 4 Feistel keys MUST stay fixed across all workers, containers,
+    # and restarts so that generated short codes remain deterministic and consistent.
+    # NEVER commit production keys to version control; load them securely from the environment.
     id_block_size: int = 100_000
     feistel_key1: str = "deadbeef01234567"
     feistel_key2: str = "cafebabe89abcdef"
@@ -41,19 +44,24 @@ class Settings(BaseSettings):
     rate_limit_window: int = 60        # seconds
 
     # Analytics
+    analytics_enabled: bool = True
+    analytics_build: str = "new"       # "new" (COPY + async commit + bounded) vs "old" (executemany + sync commit + unbounded)
     analytics_queue_size: int = 50_000
     analytics_batch_size: int = 1_000
-    analytics_flush_interval: float = 2.0
+    analytics_flush_interval: float = 1.0
 
     # Negative cache
     negative_cache_ttl: int = 30       # seconds
     negative_cache_max: int = 5_000
 
-    # Reserved codes (cannot be used as aliases or will conflict with routes)
+    # Reserved routes / aliases (rejected with 400 Bad Request if requested as custom aliases)
     reserved_codes: list[str] = [
-        "shorten", "health", "ready", "metrics", "api",
-        "favicon.ico", "robots.txt",
+        "shorten", "health", "ready", "metrics", "docs", "redoc",
+        "openapi.json", "api", "bench", "favicon.ico", "robots.txt",
     ]
+
+    # Benchmark-only routes (disabled by default in production)
+    enable_bench_endpoint: bool = False
 
     @field_validator("redirect_code")
     @classmethod

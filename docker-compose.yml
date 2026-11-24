@@ -5,6 +5,8 @@ x-api-common: &api-common
   environment:
     - POSTGRES_DSN=postgresql://urlshort:urlshort@postgres:5432/urlshort
     - REDIS_URL=redis://redis:6379/0
+    - ANALYTICS_ENABLED=${ANALYTICS_ENABLED:-true}
+    - ANALYTICS_BUILD=${ANALYTICS_BUILD:-new}
     - FEISTEL_KEY1=${FEISTEL_KEY1:-deadbeef01234567}
     - FEISTEL_KEY2=${FEISTEL_KEY2:-cafebabe89abcdef}
     - FEISTEL_KEY3=${FEISTEL_KEY3:-0011223344556677}
@@ -23,9 +25,9 @@ services:
     <<: *api-common
     profiles: ["tools"]
     restart: "no"
-    command: ["python", "-m", "loadtest.seed_db", "--count", "100000"]
+    command: ["python", "-m", "bench.seed_db", "--count", "100000"]
     volumes:
-      - ./loadtest:/app/loadtest
+      - ./bench:/app/bench
 
   nginx:
     image: nginx:1.27-alpine
@@ -55,6 +57,8 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
     command: >
       redis-server
       --io-threads 4
@@ -78,6 +82,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: urlshort
       POSTGRES_PASSWORD: urlshort
@@ -91,6 +97,9 @@ services:
       -c maintenance_work_mem=64MB
       -c wal_buffers=16MB
       -c checkpoint_completion_target=0.9
+      -c max_wal_size=4GB
+      -c min_wal_size=512MB
+      -c checkpoint_timeout=15min
       -c random_page_cost=1.1
       -c effective_io_concurrency=200
       -c autovacuum_vacuum_scale_factor=0.01
