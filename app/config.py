@@ -30,14 +30,15 @@ class Settings(BaseSettings):
     local_cache_max: int = 50_000
 
     # ID generation
-    # IMPORTANT: The 4 Feistel keys MUST stay fixed across all workers, containers,
-    # and restarts so that generated short codes remain deterministic and consistent.
-    # NEVER commit production keys to version control; load them securely from the environment.
+    # MANDATORY: The 4 Feistel keys have NO default fallback in code.
+    # They MUST be provided via environment variables / .env at startup;
+    # missing keys will cause the server to fail fast with a ValidationError.
+    # NEVER commit production keys to version control.
     id_block_size: int = 100_000
-    feistel_key1: str = "deadbeef01234567"
-    feistel_key2: str = "cafebabe89abcdef"
-    feistel_key3: str = "0011223344556677"
-    feistel_key4: str = "8899aabbccddeeff"
+    feistel_key1: str
+    feistel_key2: str
+    feistel_key3: str
+    feistel_key4: str
 
     # Rate limiting
     rate_limit_creates: int = 10       # requests per window

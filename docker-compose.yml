@@ -7,10 +7,11 @@ x-api-common: &api-common
     - REDIS_URL=redis://redis:6379/0
     - ANALYTICS_ENABLED=${ANALYTICS_ENABLED:-true}
     - ANALYTICS_BUILD=${ANALYTICS_BUILD:-new}
-    - FEISTEL_KEY1=${FEISTEL_KEY1:-deadbeef01234567}
-    - FEISTEL_KEY2=${FEISTEL_KEY2:-cafebabe89abcdef}
-    - FEISTEL_KEY3=${FEISTEL_KEY3:-0011223344556677}
-    - FEISTEL_KEY4=${FEISTEL_KEY4:-8899aabbccddeeff}
+    - FEISTEL_KEY1=${FEISTEL_KEY1}
+    - FEISTEL_KEY2=${FEISTEL_KEY2}
+    - FEISTEL_KEY3=${FEISTEL_KEY3}
+    - FEISTEL_KEY4=${FEISTEL_KEY4}
+  stop_grace_period: 15s
   depends_on:
     postgres:
       condition: service_healthy
@@ -57,8 +58,6 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    ports:
-      - "6379:6379"
     command: >
       redis-server
       --io-threads 4
@@ -82,8 +81,6 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_USER: urlshort
       POSTGRES_PASSWORD: urlshort
